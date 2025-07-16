@@ -1,254 +1,123 @@
-﻿using System;
-using System.Reflection;
-using System.Reflection.Emit;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Verse;
-using RimWorld;
-using HarmonyLib;
-using UnityEngine;
 using LudeonTK;
+using RimWorld;
+using UnityEngine;
+using Verse;
 
-namespace Bloody_Mess
+namespace Bloody_Mess;
+
+[DefOf]
+public static class BloodyExplosion
 {
-	[DefOf]
-	public static class BloodyExplosion
-	{
-		public static DamageDef TD_BloodSplatterDamage;
-		public static ThingDef TD_ProjectileBlood;
-		public static ThingDef TD_ProjectileMeat;
-		public static SoundDef Explosion_Rocket;
-		public static SoundDef Hive_Spawn;
+	public static DamageDef TD_BloodSplatterDamage;
 
-		const float explosionRadius = 2.5f;
-		const float filthChanceBase = 0.5f;
-		const int filthCount = 2;
-		const float propagationSpeed = 0.25f;
-		const int numProjectiles = 4;
-		const int numProjectilesMeat = 1;
+	public static ThingDef TD_ProjectileBlood;
 
-		static List<ThingDefCountClass> potentialProjectileDefs = new();
+	public static ThingDef TD_ProjectileMeat;
 
-		[DebugAction("General", actionType = DebugActionType.ToolMapForPawns, allowedGameStates = AllowedGameStates.PlayingOnMap)]
-		public static void DoBloodyExplosion(Pawn pawn)
-		{
-			Map map = pawn.Map;
-			IntVec3 origin = pawn.Position;
-			ThingDef bloodDef = pawn.RaceProps.BloodDef;
-			SoundDef soundDef = pawn.RaceProps.IsFlesh ? Hive_Spawn : Explosion_Rocket;
-			float filthChance = Mod.settings.clean ? 0 : filthChanceBase;
+	public static SoundDef Explosion_Rocket;
 
-				GenExplosion.DoExplosion(origin,
-														map,
-														explosionRadius,
-														TD_BloodSplatterDamage,
-														null,//attacker?
-														doVisualEffects: false,
-														explosionSound: soundDef, // todo: maybe something from https://www.youtube.com/watch?v=vsF4BM1qhok
-														propagationSpeed: propagationSpeed,
-														preExplosionSpawnThingDef: bloodDef,
-														preExplosionSpawnChance: filthChance,
-														preExplosionSpawnThingCount: filthCount,
-														postExplosionSpawnThingDef: bloodDef,
-														postExplosionSpawnChance: filthChance/2,
-														postExplosionSpawnThingCount: filthCount);
+	public static SoundDef Hive_Spawn;
 
+	private const float explosionRadius = 2.5f;
 
-			IntVec3 startPos = pawn.Position;//seems meaningless to projectiles.
-			Vector3 launchPos = pawn.DrawPos;
-			for (int i = 0; i < numProjectiles * (Mod.settings.clean ? 3 : 1); i++)
-			{
-				ProjectileItem projectileBlood = (ProjectileItem)GenSpawn.Spawn(TD_ProjectileBlood, startPos, map);
-				projectileBlood.SetItem(new(bloodDef, 4));
+	private const float filthChanceBase = 0.5f;
 
-				IntVec3 targetPos = origin + GenRadial.RadialPattern[Rand.Range(GenRadial.NumCellsInRadius(explosionRadius*(Mod.settings.clean?0.5f:1.5f)), GenRadial.NumCellsInRadius(explosionRadius * 2.5f))];
-				projectileBlood.Launch(pawn, launchPos, targetPos, targetPos, ProjectileHitFlags.All);
+	private const int filthCount = 2;
 
-				if(i < numProjectilesMeat)
-				{
-					ProjectileItem projectileMeat = (ProjectileItem)GenSpawn.Spawn(TD_ProjectileMeat, startPos, map);
+	private const float propagationSpeed = 0.25f;
 
-					// Find what to launch based on butcher products:
-					if (pawn.GetStatValue(StatDefOf.MeatAmount) is float meatCount && meatCount > 0)
-					{
-						potentialProjectileDefs.Add(new(pawn.def.race.meatDef, (int)meatCount));
-					}
+	private const int numProjectiles = 4;
 
-					if (pawn.GetStatValue(StatDefOf.LeatherAmount) is float leatherCount && leatherCount > 0)
-					{
-						potentialProjectileDefs.Add(new(pawn.def.race.leatherDef, (int)leatherCount));
-					}
+	private const int numProjectilesMeat = 1;
 
-					if(pawn.def.butcherProducts != null)
-					{
-						potentialProjectileDefs.AddRange(pawn.def.butcherProducts.Select(dc => new ThingDefCountClass(dc.thingDef, dc.count)));
-					}
+	private static List<ThingDefCountClass> potentialProjectileDefs = new List<ThingDefCountClass>();
 
-					if (!pawn.RaceProps.Humanlike)
-					{
-						// let's be thorough
-						PawnKindLifeStage curKindLifeStage = pawn.ageTracker.CurKindLifeStage;
-						if (curKindLifeStage.butcherBodyPart != null &&
-							pawn.health.hediffSet.GetNotMissingParts().Any(part => part.IsInGroup(curKindLifeStage.butcherBodyPart.bodyPartGroup)) &&
-							((pawn.gender == Gender.Male && curKindLifeStage.butcherBodyPart.allowMale) ||
-							(pawn.gender == Gender.Female && curKindLifeStage.butcherBodyPart.allowFemale)))
-						{
-							potentialProjectileDefs.Add(new ThingDefCountClass(curKindLifeStage.butcherBodyPart.thing, 1));
-						}
-					}
+    [DebugAction("General", null, false, false, false, false, false, 0, actionType = DebugActionType.ToolMapForPawns, allowedGameStates = AllowedGameStates.PlayingOnMap)]
+    public static void DoBloodyExplosion(Pawn pawn)
+    {
+        Map map = pawn.Map;
+        IntVec3 position = pawn.Position;
+        ThingDef bloodDef = pawn.RaceProps?.BloodDef;
+        SoundDef explosionSound = (pawn.RaceProps?.IsFlesh == true ? Hive_Spawn : Explosion_Rocket);
+        float num = (Mod.settings.clean ? 0f : 0.5f);
+        DamageDef tD_BloodSplatterDamage = TD_BloodSplatterDamage;
+        ThingDef preExplosionSpawnThingDef = bloodDef;
+        float preExplosionSpawnChance = num;
 
-					// Decide on The Chosen Meat
-					Log.Message($"ProjectileMeat for {pawn} could launch {potentialProjectileDefs.ToStringSafeEnumerable()}");
-					ThingDefCountClass theChosenMeat = potentialProjectileDefs.RandomElementByWeightWithFallback(o => o.count);
-					potentialProjectileDefs.Clear();
+        //GenExplosion.DoExplosion(position, map, 2.5f, tD_BloodSplatterDamage, null, -1, -1f, explosionSound, null, null, null, bloodDef, num / 2f, 2, null, applyDamageToExplosionCellsNeighbors: false, preExplosionSpawnThingDef, preExplosionSpawnChance, 2, 0f, damageFalloff: false, null, null, null, doVisualEffects: false, 0.25f);
 
-					projectileMeat.SetItem(theChosenMeat);
+        GenExplosion.DoExplosion(center: position, map: map, radius: 2.5f, damType: tD_BloodSplatterDamage, instigator: null, damAmount: -1, armorPenetration: -1f, explosionSound: explosionSound, weapon: null, projectile: null, intendedTarget: null, postExplosionSpawnThingDef: bloodDef, postExplosionSpawnChance: num / 2f, postExplosionSpawnThingCount: 2, postExplosionGasType: null, preExplosionSpawnThingDef: preExplosionSpawnThingDef, preExplosionSpawnChance: preExplosionSpawnChance, preExplosionSpawnThingCount: 2);
 
-					Log.Message($"ProjectileMeat launching ({theChosenMeat}) at {targetPos}");
-					projectileMeat.Launch(pawn, launchPos, targetPos, targetPos, ProjectileHitFlags.All);
-				}
-			}
-		}
-	}
+        IntVec3 position2 = pawn.Position;
+        Vector3 drawPos = pawn.DrawPos;
 
-	public class ProjectileItem : Projectile
-	{
-		private ThingDef itemDef;
-		private int itemCount;
-		private Material itemMat;
-		private Mesh mesh;
-		private float rotSpeed;
+        for (int i = 0; i < 4 * ((!Mod.settings.clean) ? 1 : 3); i++)
+        {
+            if (TD_ProjectileBlood != null && bloodDef != null)
+            {
+                ProjectileItem obj = (ProjectileItem)GenSpawn.Spawn(TD_ProjectileBlood, position2, map);
+                obj?.SetItem(new ThingDefCountClass(bloodDef, 4));
+                IntVec3 intVec = position + GenRadial.RadialPattern[Rand.Range(GenRadial.NumCellsInRadius(2.5f * (Mod.settings.clean ? 0.5f : 1.5f)), GenRadial.NumCellsInRadius(6.25f))];
+                obj?.Launch(pawn, drawPos, intVec, intVec, ProjectileHitFlags.All);
+            }
 
-		public void SetItem(ThingDefCountClass defCount)
-		{
-			//probably never happens but let's be sure to get no nullrefs
-			if (defCount == null)
-				defCount = new(ThingDefOf.Gold, 100);
+            if (i >= 1 || TD_ProjectileMeat == null)
+                continue;
 
-			mesh = MeshPool.GridPlane(new Vector2(def.size.x, def.size.z));
-			itemDef = defCount.thingDef;
-			itemCount = Mathf.CeilToInt(defCount.count * Mod.settings.meatPercent);
-			itemMat = itemDef.graphic is Graphic_StackCount gr
-				? gr.SubGraphicForStackCount(itemCount, def).MatSingle
-				: itemDef.DrawMatSingle;
+            ProjectileItem obj2 = (ProjectileItem)GenSpawn.Spawn(TD_ProjectileMeat, position2, map);
 
-			rotSpeed = Rand.Range(180, 720);
-		}
+            if (pawn.def?.race?.meatDef != null)
+            {
+                float statValue = pawn.GetStatValue(StatDefOf.MeatAmount);
+                if (statValue > 0f)
+                {
+                    potentialProjectileDefs.Add(new ThingDefCountClass(pawn.def.race.meatDef, (int)statValue));
+                }
+            }
 
-		public override void DrawAt(Vector3 drawLoc, bool flip = false)
-		{
-			//Same as root but meatDef's graphicData.
-			float num = ArcHeightFactor * GenMath.InverseParabola(DistanceCoveredFraction);
-			Vector3 drawPos = drawLoc;
-			Vector3 position = drawPos + new Vector3(0f, 0f, 1f) * num;
-			if (def.projectile.shadowSize > 0f)
-			{
-				DrawShadow(drawPos, num);
-			}
-			Graphics.DrawMesh(mesh, position, Quaternion.AngleAxis(rotSpeed * DistanceCoveredFraction, Vector3.up), itemMat, 0);
-			Comps_PostDraw();
-		}
+            if (pawn.def?.race?.leatherDef != null)
+            {
+                float statValue2 = pawn.GetStatValue(StatDefOf.LeatherAmount);
+                if (statValue2 > 0f)
+                {
+                    potentialProjectileDefs.Add(new ThingDefCountClass(pawn.def.race.leatherDef, (int)statValue2));
+                }
+            }
 
-		//should be protected
-		public override void Impact(Thing hitThing, bool blockedByShield = false)
-		{
-			if (itemCount > 0)
-			{
-				// with 0: Just graphics, no spawn
+            if (pawn.def?.butcherProducts != null)
+            {
+                potentialProjectileDefs.AddRange(pawn.def.butcherProducts
+                    .Where(dc => dc?.thingDef != null)
+                    .Select(dc => new ThingDefCountClass(dc.thingDef, dc.count)));
+            }
 
-				Log.Message($"ProjectileItem {itemDef} impacted ({hitThing}) at {Position}, HitFlags = {HitFlags}");
-				if (itemDef.IsFilth)
-				{
-					if(!Mod.settings.clean)
-						FilthMaker.TryMakeFilth(Position, Map, itemDef, itemCount);
-				}
-				else
-				{
-					Thing impactItem = ThingMaker.MakeThing(itemDef);
-					impactItem.stackCount = itemCount;
-					if (!GenPlace.TryPlaceThing(impactItem, Position, Map, ThingPlaceMode.Near))
-						impactItem.Destroy();
-				}
-			}
+            if (!pawn.RaceProps?.Humanlike ?? false)
+            {
+                PawnKindLifeStage curKindLifeStage = pawn.ageTracker?.CurKindLifeStage;
+                if (curKindLifeStage?.butcherBodyPart != null &&
+                    pawn.health?.hediffSet?.GetNotMissingParts()?.Any(part => part.IsInGroup(curKindLifeStage.butcherBodyPart.bodyPartGroup)) == true &&
+                    ((pawn.gender == Gender.Male && curKindLifeStage.butcherBodyPart.allowMale) ||
+                     (pawn.gender == Gender.Female && curKindLifeStage.butcherBodyPart.allowFemale)))
+                {
+                    potentialProjectileDefs.Add(new ThingDefCountClass(curKindLifeStage.butcherBodyPart.thing, 1));
+                }
+            }
 
-			//todo: cover hitThing pawns in blood? hediff like a wound that shows bloody mark?
-			//todo: damage pawns with item's blunt damage?
-			base.Impact(hitThing, blockedByShield);
-		}
-	}
+            ThingDefCountClass item = potentialProjectileDefs
+                .Where(dc => dc != null && dc.thingDef != null)
+                .RandomElementByWeightWithFallback(dc => dc.count);
 
-	public class DamageWorker_BloodSplatter : DamageWorker
-	{
-		public override void ExplosionAffectCell(Explosion explosion, IntVec3 cell, List<Thing> damagedThings, List<Thing> ignoredThings, bool canThrowMotes)
-		{
-			//watered down DamageWorker because ThrowExplosionCell also throws dust.
+            potentialProjectileDefs.Clear();
 
-			// Also now that we're here, tweak the values.
-
-			// FleckMaker.ThrowExplosionCell(c, explosion.Map, def.explosionCellFleck, color);
-			// public static void ThrowExplosionCell(IntVec3 cell, Map map, FleckDef fleckDef, Color color)public static void ThrowExplosionCell(IntVec3 cell, Map map, FleckDef fleckDef, Color color)
-
-			Map map = explosion.Map;
-			if (cell.ShouldSpawnMotesAt(map))
-			{
-				float t = Mathf.Clamp01((explosion.Position - cell).LengthHorizontal / explosion.radius);
-				Color color = explosion.preExplosionSpawnThingDef == ThingDefOf.Filth_MachineBits ? Color.grey :
-					explosion.preExplosionSpawnThingDef.graphicData.color;
-				color.a = 1 - t;
-
-				FleckCreationData dataStatic = FleckMaker.GetDataStatic(cell.ToVector3Shifted(), map, def.explosionCellFleck);
-				dataStatic.rotation = Rand.Range(0, 360);
-				dataStatic.instanceColor = color;
-				map.flecks.CreateFleck(dataStatic);
-				/*
-				if (Rand.Value < 0.7f)
-				{
-					ThrowDustPuff(cell, map, 1.2f);
-				}
-				*/
-			}
-		}
-	}
-
-
-	// Make ProjectileItem auto-pass InterceptChanceFactorFromDistance so walls intercept projectiles at close range
-	[HarmonyPatch(typeof(Projectile), nameof(Projectile.CheckForFreeIntercept))]
-	public static class CheckForFreeInterceptPass
-	{
-		public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
-		{
-			MethodInfo InterceptChanceFactorFromDistanceInfo = AccessTools.Method("VerbUtility:InterceptChanceFactorFromDistance");
-
-			foreach (var inst in instructions)
-			{
-				yield return inst;
-
-				// One might ideally skip the call but it's easier to just replace the value on the stack.
-				if(inst.Calls(InterceptChanceFactorFromDistanceInfo))
-				{
-					// on stack: float from InterceptChanceFactorFromDistanceInfo, ready for stloc.0
-					yield return new(OpCodes.Ldarg_0);//Projectile this
-					yield return new(OpCodes.Call, AccessTools.Method(typeof(CheckForFreeInterceptPass), nameof(OneIfProjectileItem))); // OneIfProjectileItem(ret, this)
-				}
-			}
-		}
-
-		public static float OneIfProjectileItem(float value, Projectile projectile)
-		{
-			if (projectile is ProjectileItem)
-				return 1;
-			return value;
-		}
-	}
-
-
-	[HarmonyPatch(typeof(Projectile), nameof(Projectile.CheckForFreeInterceptBetween))]
-	public static class CheckForFreeInterceptBetweenPass
-	{
-		public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions) =>
-			CheckForFreeInterceptPass.Transpiler(instructions);
-	}
+            if (item != null && item.thingDef != null)
+            {
+                obj2?.SetItem(item);
+                IntVec3 intVec = position + GenRadial.RadialPattern[Rand.Range(GenRadial.NumCellsInRadius(2.5f * (Mod.settings.clean ? 0.5f : 1.5f)), GenRadial.NumCellsInRadius(6.25f))];
+                obj2?.Launch(pawn, drawPos, intVec, intVec, ProjectileHitFlags.All);
+            }
+        }
+    }
 
 }
