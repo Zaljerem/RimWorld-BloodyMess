@@ -48,7 +48,7 @@ public static class BloodyExplosion
 
         //GenExplosion.DoExplosion(position, map, 2.5f, tD_BloodSplatterDamage, null, -1, -1f, explosionSound, null, null, null, bloodDef, num / 2f, 2, null, applyDamageToExplosionCellsNeighbors: false, preExplosionSpawnThingDef, preExplosionSpawnChance, 2, 0f, damageFalloff: false, null, null, null, doVisualEffects: false, 0.25f);
 
-        GenExplosion.DoExplosion(center: position, map: map, radius: 2.5f, damType: tD_BloodSplatterDamage, instigator: null, damAmount: -1, armorPenetration: -1f, explosionSound: explosionSound, weapon: null, projectile: null, intendedTarget: null, postExplosionSpawnThingDef: bloodDef, postExplosionSpawnChance: num / 2f, postExplosionSpawnThingCount: 2, postExplosionGasType: null, preExplosionSpawnThingDef: preExplosionSpawnThingDef, preExplosionSpawnChance: preExplosionSpawnChance, preExplosionSpawnThingCount: 2);
+        GenExplosion.DoExplosion(center: position, map: map, radius: 2.5f, damType: tD_BloodSplatterDamage, instigator: null, damAmount: -1, armorPenetration: -1f, explosionSound: explosionSound, weapon: null, projectile: null, intendedTarget: null, postExplosionSpawnThingDef: bloodDef, postExplosionSpawnChance: num / 2f, postExplosionSpawnThingCount: 2, postExplosionGasType: null, preExplosionSpawnThingDef: preExplosionSpawnThingDef, preExplosionSpawnChance: preExplosionSpawnChance, preExplosionSpawnThingCount: 2, screenShakeFactor: 0f, doVisualEffects: false);
 
         IntVec3 position2 = pawn.Position;
         Vector3 drawPos = pawn.DrawPos;
